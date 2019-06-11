@@ -48,8 +48,14 @@ def bump(latest):
         return semver.bump_minor(latest)
     elif "bump-major" in labels:
         return semver.bump_major(latest)
-    else:
+    elif "bump-patch" in labels:
         return semver.bump_patch(latest)
+    elif "bump-rc" in labels:
+        return semver.bump_bump_prerelease(latest)
+    elif "finalize-rc" in labels:
+        return semver.finalize_version(latest)
+    else:
+        return semver.bump_build(latest)
 
 def tag_repo(tag):
     repository_url = os.environ["CI_REPOSITORY_URL"]
