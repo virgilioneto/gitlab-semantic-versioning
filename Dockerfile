@@ -1,11 +1,5 @@
-FROM python:3.7-slim-stretch
-
-RUN set -ex \
-    \
-    && apt-get -y upgrade \
-    && apt-get -y update \
-    && apt-get -y install git \
-    && apt-get clean
+FROM python:3.7-alpine
+RUN apk add --no-cache git
 
 WORKDIR /version-update
 
