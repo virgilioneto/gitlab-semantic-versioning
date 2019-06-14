@@ -24,11 +24,14 @@ def extract_merge_request_id_from_commit():
     matches = re.search(r'(\S*\/\S*!)(\d+)', message.decode("utf-8"), re.M|re.I)
     
     if matches == None:
-        raise Exception(f"Unable to extract merge request from commit message: {message}")
+        return None
 
     return matches.group(2)
 
 def retrieve_labels_from_merge_request(merge_request_id):
+    if merge_request_id is None:
+        return []
+       
     project_id = os.environ['CI_PROJECT_ID']
     gitlab_private_token = os.environ['NPA_PASSWORD']
 
@@ -43,19 +46,30 @@ def retrieve_labels_from_merge_request(merge_request_id):
 def bump(latest):
     merge_request_id = extract_merge_request_id_from_commit()
     labels = retrieve_labels_from_merge_request(merge_request_id)
-
-    if "bump-minor" in labels:
-        return semver.bump_minor(latest)
-    elif "bump-major" in labels:
-        return semver.bump_major(latest)
+    new_version = None
+    print('MR Labels', labels)
+    if "bump-major" in labels:
+        print('Bump major')
+        new_version = semver.bump_major(latest)
+    elif "bump-minor" in labels:
+        print('Bump minor')
+        new_version = semver.bump_minor(latest)
     elif "bump-patch" in labels:
-        return semver.bump_patch(latest)
-    elif "bump-rc" in labels:
-        return semver.bump_bump_prerelease(latest)
+        print('Bump patch')
+        new_version = semver.bump_patch(latest)
     elif "finalize-rc" in labels:
-        return semver.finalize_version(latest)
-    else:
-        return semver.bump_build(latest)
+        print('Finalize rc')
+        new_version = semver.finalize_version(latest)
+    elif "bump-build":
+        print('Bump build')
+        new_version = semver.bump_build(new_version if new_version else latest)
+
+    if "bump-rc" in labels and not "finalize-rc" in labels:
+        print('Bump rc')
+        new_version = semver.bump_prerelease(new_version if new_version else latest)
+        new_version = semver.bump_build(new_version)
+
+    return new_version if new_version else latest
 
 def tag_repo(tag):
     repository_url = os.environ["CI_REPOSITORY_URL"]
@@ -71,22 +85,23 @@ def tag_repo(tag):
 def main():
     env_list = ["CI_REPOSITORY_URL", "CI_PROJECT_ID", "CI_PROJECT_URL", "CI_PROJECT_PATH", "NPA_USERNAME", "NPA_PASSWORD"]
     [verify_env_var_presence(e) for e in env_list]
-
+    latest = None
     try:
-        latest = git("describe", "--tags").decode().strip()
+        latest = git("describe", "--abbrev=0", "--tags").decode().strip()
     except subprocess.CalledProcessError:
         # Default to version 1.0.0 if no tags are available
         version = "1.0.0"
     else:
         # Skip already tagged commits
         if '-' not in latest:
-            print(latest)
+            print('Skip already tagged commits', latest)
             return 0
 
         version = bump(latest)
 
+    print('Current version', latest)
     tag_repo(version)
-    print(version)
+    print('New version', version)
 
     return 0
 
